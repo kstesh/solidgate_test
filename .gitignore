@@ -2,3 +2,7 @@
 .idea/
 .env
 creds.txt
+logs/
+plugins/
+config/
+dags/__pycache__/
