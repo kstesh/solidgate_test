@@ -1,0 +1,19 @@
+1. Add .env file
+
+POSTGRES_USER=
+POSTGRES_PASSWORD=
+
+POSTGRES_DB1=
+POSTGRES_DB2=
+POSTGRES_DBA=
+
+AIRFLOW_UID=50000
+
+_AIRFLOW_WWW_USER_USERNAME=
+_AIRFLOW_WWW_USER_PASSWORD=
+
+OPEN_EXCHANGE_RATES_APP_ID
+ 
+2. docker compose up airflow-init      
+
+3. docker-compose up -d   
