@@ -4,11 +4,14 @@ from datetime import datetime, timedelta
 from airflow.decorators import dag, task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.providers.postgres.operators.postgres import PostgresOperator
+from airflow.exceptions import AirflowFailException
 import logging
 import pandas as pd
+import requests
+import os
 
-currencies = ['USD', 'EUR', 'UAH', 'GBP', 'PLN']
-ORDERS_NUMBER = 100
+EXCHANGE_API_KEY = os.getenv('OPEN_EXCHANGE_RATES_APP_ID')
+ORDERS_NUMBER = 5000
 
 
 @dag(
@@ -20,8 +23,31 @@ ORDERS_NUMBER = 100
 )
 def generate_orders():
 
+    def get_currency_list() -> list[str]:
+        logging.info("Fetching currencies from API.")
+        url = f"https://openexchangerates.org/api/currencies.json?app_id={EXCHANGE_API_KEY}"
+
+        try:
+            response = requests.get(url)
+            response_dict = response.json()
+            response_dict.pop('VEF')
+            if response.status_code != 200:
+                logging.error(f"API request failed with status {response.status_code}: {response.text}")
+                raise AirflowFailException(f"API request failed: {response.status_code}")
+
+            logging.info(f"Currency list successfully fetched!")
+
+            return list(response_dict.keys())
+
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Network error during API request: {e}")
+            raise AirflowFailException("Network error")
+        except Exception as e:
+            logging.error(f"Failed to fetch currency list: {e}")
+            raise
+
     # Function to generate a single order
-    def generate_order():
+    def generate_order(currencies: list[str]) -> tuple:
         return (
             str(uuid.uuid4()),
             f"user{random.randint(1000, 9999)}@test.test",
@@ -33,7 +59,8 @@ def generate_orders():
     @task(task_id='generate_new_data',)
     def generate_new_data():
         logging.info(f"Generating {ORDERS_NUMBER} orders...")
-        orders = [generate_order() for _ in range(ORDERS_NUMBER)]
+        currency_list = get_currency_list()
+        orders = [generate_order(currency_list) for _ in range(ORDERS_NUMBER)]
         logging.info(f"{ORDERS_NUMBER} were generated!")
         return pd.DataFrame(orders, columns=['order_id', 'customer_email', 'order_date', 'amount', 'currency'])
 
@@ -59,7 +86,6 @@ def generate_orders():
 
         df_to_upload['update_id'] = int(datetime.now().strftime('%Y%m%d%H%M%S'))
 
-        # Insert data into PostgreSQL using the PostgresHook
         try:
             hook = PostgresHook(postgres_conn_id='postgres_1')
             engine = hook.get_sqlalchemy_engine()
